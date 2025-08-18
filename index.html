@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>App Docente</title>
+<style>
+  :root{--bg:#f5f7fb;--top:#2c3e50;--nav:#34495e;--pri:#1abc9c;--b:#e2e6ea;--hdr:#eef2f6;--txt:#1f2328}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font-family:Arial,Helvetica,sans-serif}
+  header{background:var(--top);color:#fff;padding:12px 16px;text-align:center}
+  nav{display:flex;background:var(--nav)}
+  nav button{flex:1;border:0;background:var(--nav);color:#fff;padding:12px;font-weight:700;cursor:pointer}
+  nav button.active,nav button:hover{background:var(--pri)}
+  section{display:none;padding:16px}
+  section.active{display:block}
+  .card{background:#fff;border:1px solid var(--b);border-radius:10px;padding:14px;margin:12px 0;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  input,select,button{padding:8px;border:1px solid var(--b);border-radius:6px;font-size:14px}
+  button.primary{background:var(--pri);color:#fff;border:0}
+  .muted{color:#6b7280;font-size:12px}
+  .table-wrap{overflow:auto}
+  table{width:100%;border-collapse:collapse;table-layout:fixed}
+  th,td{border:1px solid var(--b);padding:6px;text-align:center;font-size:12px}
+  th{background:var(--hdr)}
+  th.sticky,td.sticky{position:sticky;left:0;background:#fff;z-index:2}
+  th.sticky{z-index:3}
+  td input{width:60px;font-size:12px;padding:3px;text-align:center}
+  .compact td input{width:48px}
+  /* Calendario */
+  .cal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+  .cal-day{background:#fff;border:1px solid var(--b);border-radius:8px;min-height:110px;padding:6px;display:flex;flex-direction:column}
+  .cal-day .dnum{font-weight:700;margin-bottom:6px}
+  .cal-day .elist{display:flex;flex-direction:column;gap:4px;overflow:auto}
+  .pill{border:1px solid var(--b);border-radius:999px;font-size:11px;padding:2px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .today{outline:2px solid var(--pri)}
+  .dow{font-weight:700;text-align:center;margin-bottom:4px}
+</style>
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1abc9c">
+<link rel="icon" href="icons/icon-192.png">
+
+</head>
+<body>
+<header><h1>📚 App Docente</h1></header>
+<nav>
+  <button class="active" onclick="show('estudiantes',event)">Estudiantes</button>
+  <button onclick="show('materias',event)">Materias</button>
+  <button onclick="show('calendario',event)">Calendario</button>
+</nav>
+
+<!-- ESTUDIANTES -->
+<section id="estudiantes" class="active">
+  <div class="card">
+    <h3>Importar estudiantes (Excel)</h3>
+    <div class="row">
+      <input type="file" id="fileStudents" accept=".xlsx,.xls" onchange="importStudents(event)">
+      <input type="text" id="matForAssign" placeholder="Materia exacta para asignar listado">
+      <button class="primary" onclick="assignListToSubject()">Asignar a materia</button>
+      <button onclick="exportSubjectList()">Descargar listado de la materia</button>
+    </div>
+    <div class="muted">Encabezados aceptados: <b>Nombre</b>, <b>Documento/Cédula/ID</b>, <b>Correo/Email</b>, <b>Teléfono/Celular</b>. Acepta variantes como <i>nombre_alumno</i>, <i>numero_documento</i>.</div>
+  </div>
+  <div class="card table-wrap">
+    <table>
+      <thead><tr><th>Nombre</th><th>Documento</th><th>Email</th><th>Teléfono</th><th>Eliminar</th></tr></thead>
+      <tbody id="tblStudents"></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- MATERIAS -->
+<section id="materias">
+  <div class="card">
+    <h3>Materias y cortes</h3>
+    <div class="row">
+      <input type="text" id="newSubject" placeholder="Nombre de la materia">
+      <button class="primary" onclick="addSubject()">Registrar</button>
+      <select id="selSubject" onchange="renderSubject()"></select>
+      <select id="selCorte" onchange="renderSubject()">
+        <option value="Corte 1">Corte 1</option>
+        <option value="Corte 2">Corte 2</option>
+        <option value="Corte 3">Corte 3</option>
+      </select>
+      <button onclick="deleteSubject()">Eliminar</button>
+      <button onclick="syncSubjectStudents()">Sincronizar estudiantes</button>
+      <label class="row" style="gap:4px">COG <input id="pctCOG" type="number" min="0" max="100" value="50" style="width:70px"> %</label>
+      <label class="row" style="gap:4px">ACUM <input id="pctACUM" type="number" min="0" max="100" value="50" style="width:70px"> %</label>
+      <button class="primary" onclick="saveWeights()">Guardar pesos</button>
+      <button onclick="exportGrades()">Exportar notas (Excel)</button>
+      <label><input type="checkbox" id="chkCompact" onchange="renderSubject()"> Vista compacta</label>
+    </div>
+    <div class="muted">Formato: C1..C6, <b>Sub (COG)</b> = promedio C1..C6, <b>A1</b>, <b>Sub (ACUM)</b> = promedio A1, <b>Final</b> = SubCOG*(%COG/100) + SubACUM*(%ACUM/100). Todo con <b>coma</b> decimal.</div>
+  </div>
+  <div class="card table-wrap" id="gradesWrap"></div>
+</section>
+
+<!-- CALENDARIO -->
+<section id="calendario">
+  <div class="card">
+    <div class="cal-header">
+      <div>
+        <button onclick="prevMonth()">◀</button>
+        <strong id="calTitle"></strong>
+        <button onclick="nextMonth()">▶</button>
+      </div>
+      <div><button class="primary" onclick="enableNotifs()">🔔 Activar alarmas</button></div>
+    </div>
+    <div class="row" style="margin-bottom:6px">
+      <div class="dow">Lun</div><div class="dow">Mar</div><div class="dow">Mié</div><div class="dow">Jue</div><div class="dow">Vie</div><div class="dow">Sáb</div><div class="dow">Dom</div>
+    </div>
+    <div id="calGrid" class="cal-grid"></div>
+  </div>
+  <div class="card">
+    <h3>Agregar evento / Importar lista</h3>
+    <div class="row">
+      <input type="date" id="evDate">
+      <input type="time" id="evTime">
+      <select id="evSubject"></select>
+      <input type="text" id="evTitle" placeholder="Título">
+      <input type="number" id="evAlarm" value="15" min="0" title="Minutos antes">
+      <button class="primary" onclick="addEvent()">Agregar</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <input type="file" id="fileList" accept=".xlsx,.xls">
+      <button class="primary" onclick="importListExcel()">Importar horario tipo lista</button>
+    </div>
+    <div class="muted">Lista: <b>FECHAS</b> (p. ej. “lunes, 10 de febrero de 2025”), <b>PORCENTAJES O NOTAS</b> (actividad). Opcional: <b>Materia</b>, <b>Hora Inicio</b>.</div>
+  </div>
+</section>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+/* ==========================
+   Estado
+========================== */
+let students = JSON.parse(localStorage.getItem('students')||'[]');               // [{nombre,documento,email,telefono}]
+let subjectStudents = JSON.parse(localStorage.getItem('subjectStudents')||'{}'); // {Materia:[{...}]}
+let subjects = JSON.parse(localStorage.getItem('subjectsV4')||'{}');             // {Materia:{pesos:{cog,acum}, cortes:{'Corte 1':[ {nombre, c[6], a1} ]}}}
+let events = JSON.parse(localStorage.getItem('events')||'[]');
+let calMonth = new Date();
+
+/* ==========================
+   Utils (coma decimal)
+========================== */
+function saveAll(){
+  localStorage.setItem('students', JSON.stringify(students));
+  localStorage.setItem('subjectStudents', JSON.stringify(subjectStudents));
+  localStorage.setItem('subjectsV4', JSON.stringify(subjects));
+  localStorage.setItem('events', JSON.stringify(events));
+}
+function show(id,ev){ document.querySelectorAll('section').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+  if(ev) ev.target.classList.add('active');
+  if(id==='materias'){ fillSubjectSelects(); renderSubject(); }
+  if(id==='calendario'){ fillSubjectSelects(); renderCalendar(); }
+}
+function pad2(n){return String(n).padStart(2,'0')}
+function toISO(d){return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`}
+
+function parseCommaNum(v){
+  if(v===undefined || v===null || v==='') return NaN;
+  if(typeof v==='number') return v;
+  return parseFloat(String(v).replace(/\./g,'').replace(',', '.'));
+}
+function fmtComma(n,dec=2){
+  if(isNaN(n)) return '';
+  return Number(n).toFixed(dec).replace('.',',');
+}
+
+/* ==========================
+   ESTUDIANTES
+========================== */
+function importStudents(e){
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=ev=>{
+    const wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array'});
+    const sh=wb.Sheets[wb.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(sh,{header:1,defval:''});
+    if(!rows.length){alert('El Excel está vacío');return;}
+    const H=rows[0].map(h=>String(h).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''));
+    const iNombre = H.findIndex(h=>/nombre|nombre_alumno|estudiante/.test(h));
+    const iDoc = H.findIndex(h=>/documento|cedula|c[eé]dula|id|numero_documento/.test(h));
+    const iMail = H.findIndex(h=>/correo|email/.test(h));
+    const iTel  = H.findIndex(h=>/telefono|tel[eé]fono|celular/.test(h));
+    if(iNombre<0){alert('No se encontró la columna de NOMBRE');return;}
+    students = rows.slice(1).map(r=>({
+      nombre: r[iNombre]??'',
+      documento: (iDoc>=0? r[iDoc] : '')+'',
+      email: (iMail>=0? r[iMail] : '')+'',
+      telefono: (iTel>=0? r[iTel] : '')+''
+    })).filter(x=>String(x.nombre).trim()!=='');
+    saveAll(); renderStudents(); e.target.value='';
+  };
+  r.readAsArrayBuffer(f);
+}
+function renderStudents(){
+  const tb=document.getElementById('tblStudents'); if(!tb) return;
+  tb.innerHTML='';
+  students.forEach((s,i)=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${s.nombre}</td><td>${s.documento||''}</td><td>${s.email||''}</td><td>${s.telefono||''}</td>
+      <td><button onclick="delStudent(${i})">🗑️</button></td>`;
+    tb.appendChild(tr);
+  });
+}
+function delStudent(i){ students.splice(i,1); saveAll(); renderStudents(); }
+function assignListToSubject(){
+  const m=document.getElementById('matForAssign').value.trim();
+  if(!m){alert('Escribe el nombre exacto de la materia');return;}
+  if(!students.length){alert('Primero importa estudiantes');return;}
+  subjectStudents[m]=JSON.parse(JSON.stringify(students));
+  if(subjects[m]){
+    ['Corte 1','Corte 2','Corte 3'].forEach(k=>{
+      const byName=new Map((subjects[m].cortes[k]||[]).map(r=>[r.nombre,r]));
+      subjects[m].cortes[k]=subjectStudents[m].map(s=> byName.get(s.nombre) || ({nombre:s.nombre,c:Array(6).fill(''),a1:''}));
+    });
+  }
+  saveAll(); alert('Listado asignado a la materia.');
+}
+function exportSubjectList(){
+  const m=document.getElementById('matForAssign').value.trim();
+  const data=(subjectStudents[m]||[]); if(!data.length){alert('Esa materia no tiene listado');return;}
+  const ws=XLSX.utils.json_to_sheet(data); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Estudiantes');
+  XLSX.writeFile(wb,`Listado_${m}.xlsx`);
+}
+
+/* ==========================
+   MATERIAS
+========================== */
+function fillSubjectSelects(){
+  const s1=document.getElementById('selSubject');
+  const s2=document.getElementById('evSubject');
+  [s1,s2].forEach(sel=>{ if(!sel) return; sel.innerHTML=''; Object.keys(subjects).forEach(m=>{const o=document.createElement('option');o.value=m;o.textContent=m; sel.appendChild(o);}); });
+  // pesos
+  const cur=document.getElementById('selSubject')?.value;
+  if(cur && subjects[cur]){
+    document.getElementById('pctCOG').value = subjects[cur].pesos?.cog ?? 50;
+    document.getElementById('pctACUM').value = subjects[cur].pesos?.acum ?? 50;
+  }
+}
+function addSubject(){
+  const m=document.getElementById('newSubject').value.trim();
+  if(!m){alert('Escribe el nombre de la materia');return;}
+  if(!subjects[m]){
+    const base=(subjectStudents[m]&&subjectStudents[m].length)? subjectStudents[m] : students;
+    subjects[m]={pesos:{cog:50,acum:50}, cortes:{
+      'Corte 1': base.map(s=>({nombre:s.nombre, c:Array(6).fill(''), a1:''})),
+      'Corte 2': base.map(s=>({nombre:s.nombre, c:Array(6).fill(''), a1:''})),
+      'Corte 3': base.map(s=>({nombre:s.nombre, c:Array(6).fill(''), a1:''})),
+    }};
+  }
+  saveAll(); document.getElementById('newSubject').value=''; fillSubjectSelects(); renderSubject();
+}
+function deleteSubject(){
+  const m=document.getElementById('selSubject').value; if(!m) return;
+  if(confirm(`¿Eliminar ${m}?`)){ delete subjects[m]; saveAll(); fillSubjectSelects(); document.getElementById('gradesWrap').innerHTML=''; }
+}
+function saveWeights(){
+  const m=document.getElementById('selSubject').value; if(!m) return;
+  const cog=Number(document.getElementById('pctCOG').value||50);
+  const acum=Number(document.getElementById('pctACUM').value||50);
+  subjects[m].pesos={cog,acum}; saveAll(); renderSubject(); alert('Pesos guardados.');
+}
+function syncSubjectStudents(){
+  const m=document.getElementById('selSubject').value; if(!m){alert('Selecciona una materia');return;}
+  const base=(subjectStudents[m]&&subjectStudents[m].length)? subjectStudents[m] : students;
+  if(!base.length){alert('No hay estudiantes para sincronizar. Importa o asigna primero.'); return;}
+  const cortes=subjects[m].cortes; ['Corte 1','Corte 2','Corte 3'].forEach(k=>{
+    const map=new Map((cortes[k]||[]).map(r=>[r.nombre,r]));
+    cortes[k]=base.map(s=> map.get(s.nombre) || ({nombre:s.nombre,c:Array(6).fill(''),a1:''}));
+  });
+  saveAll(); renderSubject();
+}
+function renderSubject(){
+  const m=document.getElementById('selSubject').value; const corte=document.getElementById('selCorte').value;
+  const wrap=document.getElementById('gradesWrap'); wrap.innerHTML='';
+  if(!m || !subjects[m]){ wrap.innerHTML='<div class="muted">Seleccione o cree una materia.</div>'; return; }
+  // pesos UI
+  document.getElementById('pctCOG').value = subjects[m].pesos?.cog ?? 50;
+  document.getElementById('pctACUM').value = subjects[m].pesos?.acum ?? 50;
+
+  const data=subjects[m].cortes[corte]||[];
+  const tbl=document.createElement('table');
+  tbl.className=document.getElementById('chkCompact').checked?'compact':'';
+  const head=`<thead>
+    <tr>
+      <th class="sticky">Estudiante</th>
+      <th>C1</th><th>C2</th><th>C3</th><th>C4</th><th>C5</th><th>C6</th>
+      <th>Sub (COG)</th>
+      <th>A1</th>
+      <th>Sub (ACUM)</th>
+      <th>Final</th>
+    </tr>
+  </thead>`;
+  const body=document.createElement('tbody');
+  data.forEach((row,ri)=>{
+    const cVals = row.c.map(v=>parseCommaNum(v));
+    const subCog = cVals.filter(x=>!isNaN(x)).length? (cVals.reduce((a,b)=>a+(isNaN(b)?0:b),0) / cVals.filter(x=>!isNaN(x)).length) : NaN;
+    const a1 = parseCommaNum(row.a1);
+    const subAcum = isNaN(a1)? NaN : a1; // promedio de A1 (una sola)
+    const cogP = (subjects[m].pesos?.cog ?? 50)/100;
+    const acumP = (subjects[m].pesos?.acum ?? 50)/100;
+    const final = (isNaN(subCog)?0:subCog)*cogP + (isNaN(subAcum)?0:subAcum)*acumP;
+
+    const tr=document.createElement('tr');
+    let cells=`<td class="sticky" style="text-align:left">${row.nombre}</td>`;
+    for(let j=0;j<6;j++){
+      const val = row.c[j] ?? '';
+      cells+=`<td><input inputmode="decimal" value="${String(val).replace('.',',')}" 
+        oninput="updC('${m}','${corte}',${ri},${j},this.value)"></td>`;
+    }
+    cells+=`<td>${fmtComma(subCog)}</td>`;
+    cells+=`<td><input inputmode="decimal" value="${String(row.a1??'').replace('.',',')}" 
+             oninput="updA1('${m}','${corte}',${ri},this.value)"></td>`;
+    cells+=`<td>${fmtComma(subAcum)}</td>`;
+    cells+=`<td>${fmtComma(final)}</td>`;
+    tr.innerHTML=cells; body.appendChild(tr);
+  });
+  tbl.innerHTML=head; tbl.appendChild(body);
+  const btn=document.createElement('button'); btn.className='primary'; btn.textContent='Guardar Datos';
+  btn.onclick=()=>{ saveAll(); alert('Datos guardados'); };
+  wrap.appendChild(tbl); wrap.appendChild(document.createElement('br')); wrap.appendChild(btn);
+}
+function recalcRow(m,corte,ri){ renderSubject(); }
+function updC(m,corte,ri,j,val){ subjects[m].cortes[corte][ri].c[j]=val; saveAll(); recalcRow(m,corte,ri); }
+function updA1(m,corte,ri,val){ subjects[m].cortes[corte][ri].a1=val; saveAll(); recalcRow(m,corte,ri); }
+
+function exportGrades(){
+  const m=document.getElementById('selSubject').value; if(!m||!subjects[m]) return;
+  const wb=XLSX.utils.book_new();
+  ['Corte 1','Corte 2','Corte 3'].forEach(c=>{
+    const rows=subjects[m].cortes[c]||[];
+    const cogP=(subjects[m].pesos?.cog??50)/100, acumP=(subjects[m].pesos?.acum??50)/100;
+    const data=rows.map(r=>{
+      const cnums=r.c.map(x=>parseCommaNum(x));
+      const subCog = cnums.filter(v=>!isNaN(v)).length? (cnums.reduce((a,b)=>a+(isNaN(b)?0:b),0)/cnums.filter(v=>!isNaN(v)).length) : NaN;
+      const a1 = parseCommaNum(r.a1);
+      const subAcum = isNaN(a1)? NaN : a1;
+      const final=(isNaN(subCog)?0:subCog)*cogP + (isNaN(subAcum)?0:subAcum)*acumP;
+      const o={Nombre:r.nombre};
+      for(let i=0;i<6;i++) o[`C${i+1}`]= (r.c[i]!=='' && r.c[i]!==undefined)? String(r.c[i]).replace('.',',') : '';
+      o['Sub (COG)']=fmtComma(subCog);
+      o['A1']= (r.a1!=='' && r.a1!==undefined)? String(r.a1).replace('.',',') : '';
+      o['Sub (ACUM)']=fmtComma(subAcum);
+      o['Final']=fmtComma(final);
+      return o;
+    });
+    const ws=XLSX.utils.json_to_sheet(data); XLSX.utils.book_append_sheet(wb,ws,c);
+  });
+  XLSX.writeFile(wb,`Notas_${m}.xlsx`);
+}
+
+/* ==========================
+   CALENDARIO
+========================== */
+function renderCalendar(){
+  const title=document.getElementById('calTitle');
+  const grid=document.getElementById('calGrid'); grid.innerHTML='';
+  const y=calMonth.getFullYear(), m=calMonth.getMonth();
+  title.textContent=`${calMonth.toLocaleString('es-CO',{month:'long'})} ${y}`;
+  const first=new Date(y,m,1), start=new Date(first); const day=(first.getDay()+6)%7; // 0=lun
+  start.setDate(first.getDate()-day);
+  for(let i=0;i<42;i++){
+    const d=new Date(start); d.setDate(start.getDate()+i);
+    const card=document.createElement('div'); card.className='cal-day';
+    if(toISO(d)===toISO(new Date())) card.classList.add('today');
+    card.innerHTML=`<div class="dnum">${d.getDate()}</div><div class="elist" id="elist-${toISO(d)}"></div>`;
+    grid.appendChild(card);
+  }
+  events.forEach(ev=>{
+    const list=document.getElementById(`elist-${ev.date}`); if(!list) return;
+    const p=document.createElement('div'); p.className='pill';
+    p.title=(ev.time?ev.time+' · ':'')+(ev.subject?ev.subject+' · ':'')+ev.title;
+    p.textContent=(ev.time?ev.time+' ':'')+(ev.subject?`[${ev.subject}] `:'')+ev.title;
+    const del=document.createElement('button'); del.textContent='✕'; del.onclick=()=>{ events=events.filter(x=>x.id!==ev.id); saveAll(); renderCalendar(); };
+    const row=document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between'; row.style.alignItems='center';
+    row.appendChild(p); row.appendChild(del);
+    list.appendChild(row);
+  });
+}
+function prevMonth(){ calMonth.setMonth(calMonth.getMonth()-1); renderCalendar(); }
+function nextMonth(){ calMonth.setMonth(calMonth.getMonth()+1); renderCalendar(); }
+async function enableNotifs(){ try{ const p=await Notification.requestPermission(); if(p!=='granted') alert('Permite notificaciones para usar alarmas'); else alert('Listo.'); }catch{} }
+function addEvent(){
+  const date=document.getElementById('evDate').value; if(!date){alert('Pon una fecha');return;}
+  const time=document.getElementById('evTime').value||''; const subject=document.getElementById('evSubject').value||''; const title=document.getElementById('evTitle').value||'Evento';
+  const alarmM=parseInt(document.getElementById('evAlarm').value||'0',10);
+  const ev={id:'e'+Date.now(),date,time,title,subject,alarmM};
+  events.push(ev); saveAll(); scheduleAlarm(ev); renderCalendar();
+}
+function importListExcel(){
+  const f=document.getElementById('fileList').files[0]; if(!f){alert('Selecciona un Excel');return;}
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
+      const wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array'});
+      let count=0;
+      wb.SheetNames.forEach(shn=>{
+        const sh=wb.Sheets[shn];
+        const rows=XLSX.utils.sheet_to_json(sh,{defval:''});
+        if(!rows.length) return;
+        const headers=Object.keys(rows[0]);
+        const colFecha = headers.find(h=>/fechas?|date/i.test(h))||'FECHAS';
+        const colAct   = headers.find(h=>/(porcentajes.*notas|actividad|notas?)/i.test(h))||'Actividad';
+        const colMat   = headers.find(h=>/materia|asignatura/i.test(h));
+        const colHIni  = headers.find(h=>/hora.*inicio|inicio|start|hi/i.test(h));
+        rows.forEach(r=>{
+          const d=parseEsDate(r[colFecha]); if(!d) return;
+          const date=toISO(d);
+          const title=(r[colAct]||'Clase')+'';
+          const subject=(colMat? (r[colMat]||'') : (document.getElementById('evSubject').value||shn))+''; 
+          const time=normalizeExcelTime(r[colHIni]||'');
+          const ev={id:'e'+Date.now()+Math.random(),date,time,title,subject,alarmM:15};
+          events.push(ev); scheduleAlarm(ev); count++;
+        });
+      });
+      saveAll(); renderCalendar();
+      alert(`Importadas ${count} filas.`);
+      document.getElementById('fileList').value='';
+    }catch(e){ console.error(e); alert('No se pudo leer el archivo'); }
+  };
+  reader.readAsArrayBuffer(f);
+}
+/* Notificaciones (alarmas) */
+function scheduleAlarm(ev){
+  if(!ev.time) return;
+  const [hh,mm]=ev.time.split(':').map(Number);
+  const when=new Date(ev.date+'T'+pad2(hh)+':'+pad2(mm)+':00');
+  const diff=when.getTime()-Date.now()-(ev.alarmM||0)*60000;
+  if(diff>0 && Notification?.permission==='granted'){
+    setTimeout(()=>{ new Notification(ev.subject?`[${ev.subject}] ${ev.title}`:ev.title,{body:`${ev.time} · ${ev.date}`}); }, diff);
+  }
+}
+/* util calendario */
+const meses = {'enero':0,'febrero':1,'marzo':2,'abril':3,'mayo':4,'junio':5,'julio':6,'agosto':7,'septiembre':8,'setiembre':8,'octubre':9,'noviembre':10,'diciembre':11};
+function parseEsDate(txt){
+  if(typeof txt==='number'){return excelSerialToDate(txt);}
+  const s=String(txt||'').toLowerCase().trim().replace(/^(lunes|martes|mi[eé]rcoles|miercoles|jueves|viernes|s[aá]bado|sabado|domingo)\s*,?\s*/, '');
+  let m=s.match(/^(\d{1,2})\s*(de)?\s*([a-záéíóú]+)\s*(de)?\s*(\d{4})$/i);
+  if(m){
+    const d=parseInt(m[1],10), mon=meses[m[3].normalize('NFD').replace(/[\u0300-\u036f]/g,'')], y=parseInt(m[5],10);
+    if(mon!=null) return new Date(y,mon,d,0,0,0,0);
+  }
+  const d=new Date(String(txt)); return isNaN(d.getTime())?null:d;
+}
+function excelSerialToDate(serial){
+  if(XLSX?.SSF?.parse_date_code){
+    const o=XLSX.SSF.parse_date_code(serial); if(!o) return null;
+    return new Date(o.y,(o.m||1)-1,o.d||1,o.H||0,o.M||0,o.S||0);
+  }
+  const epoch = new Date(Date.UTC(1899,11,30));
+  return new Date(epoch.getTime()+serial*24*60*60*1000);
+}
+function normalizeExcelTime(val){
+  if(val==null || val==='') return '';
+  if(typeof val==='number'){
+    const total=Math.round(val*24*60); const h=pad2(Math.floor(total/60)), m=pad2(total%60); return `${h}:${m}`;
+  }
+  const s=String(val).trim(); const mm=s.match(/^(\d{1,2}):(\d{2})/); if(mm) return `${pad2(mm[1])}:${pad2(mm[2])}`;
+  const d=new Date(`1970-01-01 ${s}`); if(!isNaN(d)) return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  return '';
+}
+
+/* ==========================
+   Inicio
+========================== */
+function init(){ renderStudents(); fillSubjectSelects(); renderSubject(); renderCalendar(); }
+window.onload=init;
+</script>
+
+<script>
+// Registrar Service Worker para PWA
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./service-worker.js').catch(()=>{});
+  });
+}
+</script>
+
+</body>
+</html>
